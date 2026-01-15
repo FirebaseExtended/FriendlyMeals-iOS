@@ -1,0 +1,102 @@
+//
+// FriendlyMeals
+//
+// Copyright © 2025 Google LLC.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import SwiftUI
+
+struct MealPlannerSuggestionView: View {
+  @State private var viewModel = MealPlannerSuggestionViewModel()
+  @Environment(RecipeStore.self) private var recipeStore
+  @Environment(LikesStore.self) private var likesStore
+
+  var recipeIsLiked: Bool {
+    return viewModel.recipe.flatMap { likesStore.isLiked($0) } ?? false
+  }
+
+  var body: some View {
+    Form {
+      Section("Ingredients") {
+        TextField(
+          "Enter ingredients",
+          text: $viewModel.ingredients,
+          axis: .vertical
+        )
+        .lineLimit(8...8)
+      }
+      Section("Notes") {
+        TextField(
+          "Any notes or preferred cuisines?",
+          text: $viewModel.notes,
+          axis: .vertical
+        )
+        .lineLimit(8...8)
+      }
+      Section {
+        Button(action: {
+          Task {
+            await viewModel.generateRecipe()
+          }
+        }) {
+          if viewModel.isGenerating {
+            ProgressView()
+              .progressViewStyle(CircularProgressViewStyle())
+              .padding(.horizontal)
+          } else {
+            Text("Suggest Recipe")
+              .frame(maxWidth: .infinity)
+          }
+        }
+        .disabled(viewModel.ingredients.isEmpty || viewModel.isGenerating)
+      }
+    }
+    .navigationTitle("Suggest a recipe")
+    .sheet(isPresented: $viewModel.isPresentingRecipe) {
+      NavigationStack {
+        RecipeDetailsView(
+          recipe: viewModel.recipe,
+          placeholderImage: viewModel.recipeImage,
+          errorMessage: viewModel.errorMessage,
+          isNew: true,
+          isLiked: recipeIsLiked,
+          onSave: {
+            Task {
+              await viewModel.addRecipe(to: recipeStore)
+            }
+          },
+          onLike: { newLike in
+            viewModel.writeLike(newLike, to: likesStore)
+          }
+        )
+        .toolbar {
+          ToolbarItem(placement: .navigationBarTrailing) {
+            Button(action: { viewModel.isPresentingRecipe.toggle() }) {
+              Label("Close", systemImage: "xmark")
+            }
+          }
+        }
+      }
+    }
+    .sheet(isPresented: $viewModel.isPresentingPaywall) {
+      PaywallView()
+    }
+
+  }
+}
+
+#Preview {
+  MealPlannerSuggestionView()
+    .environment(RecipeStore())
+}
