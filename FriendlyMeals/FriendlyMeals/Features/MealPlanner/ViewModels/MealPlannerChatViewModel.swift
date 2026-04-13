@@ -16,7 +16,7 @@
 // limitations under the License.
 
 import ConversationKit
-import FirebaseAI
+import FirebaseAILogic
 import SwiftUI
 
 @Observable

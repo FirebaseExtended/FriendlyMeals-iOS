@@ -17,7 +17,7 @@
 
 import Foundation
 import FirebaseRemoteConfig
-import FirebaseAI
+import FirebaseAILogic
 
 fileprivate enum RemoteConfigKey: String {
   case maxImagesPerDay = "max_images_per_day"

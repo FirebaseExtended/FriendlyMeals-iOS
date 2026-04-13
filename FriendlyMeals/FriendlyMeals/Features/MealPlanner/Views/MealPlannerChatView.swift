@@ -17,7 +17,7 @@
 
 import SwiftUI
 import ConversationKit
-import FirebaseAI
+import FirebaseAILogic
 
 struct MealPlannerChatView: View {
   @State private var viewModel = MealPlannerChatViewModel()

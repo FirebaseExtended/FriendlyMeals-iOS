@@ -23,7 +23,6 @@ import FirebaseAuth
 enum RecipeStoreError: Error {
   case missingRecipeID
   case likeDecodingError(String)
-  case recipeDecodingError(String)
   case reviewDecodingError(String)
 }
 
@@ -61,12 +60,21 @@ class RecipeStore {
       filters = filters.where(Field("title").like("%\(configuration.recipeTitle)%"))
     }
 
-    if configuration.minimumRating > 0 {
-      filters = filters.where(Field("averageRating").greaterThanOrEqual(configuration.minimumRating))
-    }
-
     if !configuration.selectedTags.isEmpty {
       filters = filters.where(Field("tags").arrayContainsAny(Array(configuration.selectedTags)))
+    }
+
+    if configuration.minimumRating > 0 {
+      let parentRestaurantID = "parentRestaurantID"
+      filters = filters.define([Field("__name__").as(parentRestaurantID)])
+        .addFields([
+          Subcollection("reviews")
+            .aggregate([Field("rating").average().as("averageRating")])
+            .toScalarExpression()
+            .as("averageRating")
+        ])
+        .where(Field("averageRating").exists() && Field("averageRating").greaterThanOrEqual(configuration.minimumRating)
+      )
     }
 
     switch configuration.sortOption {
@@ -98,44 +106,13 @@ class RecipeStore {
     try collection.addDocument(from: recipe)
   }
   
-  func fetchRecipes(withUserID userID: String? = Auth.auth().currentUser?.uid) async throws {
+  func fetchRecipes() async throws {
     let query = activeQuery
 
     let snapshot = try await query.execute()
     self.recipes = try snapshot.results.compactMap { result in
-      let imageURL = result.data["imageUri"] as? String
-
-      guard let title = result.data["title"] as? String,
-        let instructions = result.data["instructions"] as? String,
-        let ingredients = result.data["ingredients"] as? [String],
-        let authorID = result.data["authorId"] as? String,
-        let tags = result.data["tags"] as? [String],
-        let averageRating = result.data["averageRating"] as? Double,
-        let prepTime = result.data["prepTime"] as? String,
-        let cookTime = result.data["cookTime"] as? String,
-        let servings = result.data["servings"] as? String,
-        let documentID = result.id else {
-        let errorMessage = "Unable to initialize recipes from data: \(result.data)"
-        throw RecipeStoreError.recipeDecodingError(errorMessage)
-      }
-
-      var recipe = Recipe(
-        title: title,
-        instructions: instructions,
-        ingredients: ingredients,
-        authorId: authorID,
-        tags: tags,
-        averageRating: averageRating,
-        imageUri: imageURL,
-        prepTime: prepTime,
-        cookTime: cookTime,
-        servings: servings
-      )
-
-      recipe.id = documentID
-      return recipe
+      return try Recipe(from: result)
     }
-
   }
 
   @discardableResult
@@ -174,6 +151,22 @@ class RecipeStore {
     }
     let docRef = db.collection(RecipeStore.recipeCollection).document(id)
     try docRef.setData(from: recipe, mergeFields: ["isFavorite"])
+  }
+
+  func averageRating(for recipeID: String) async throws -> Double? {
+    let collectionPath =
+        "\(RecipeStore.recipeCollection)/\(recipeID)/\(RecipeStore.reviewsSubcollection)"
+
+    let snapshot = try await db
+      .pipeline()
+      .collection(collectionPath)
+      .aggregate([Field("rating").average().as("averageRating")])
+      .execute()
+
+    let average = snapshot.results.first?.data["averageRating"] as? Double
+    return average.flatMap {
+      return $0 >= 1 && $0 <= 5 ? $0 : nil
+    }
   }
 }
 

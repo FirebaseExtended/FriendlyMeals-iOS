@@ -55,4 +55,42 @@ extension Recipe {
       servings: representable.servings
     )
   }
+
+  init(from result: PipelineResult) throws {
+    let imageURL = result.data["imageUri"] as? String
+    guard let title = result.data["title"] as? String,
+      let instructions = result.data["instructions"] as? String,
+      let ingredients = result.data["ingredients"] as? [String],
+      let authorID = result.data["authorId"] as? String,
+      let tags = result.data["tags"] as? [String],
+      let averageRating = result.data["averageRating"] as? Double,
+      let prepTime = result.data["prepTime"] as? String,
+      let cookTime = result.data["cookTime"] as? String,
+      let servings = result.data["servings"] as? String,
+      let documentID = result.id else {
+      let errorMessage = "Unable to initialize recipes from data: \(result.data)"
+      throw DecodingError.missingKeys(errorMessage)
+    }
+
+    print("rating: \(result.data["averageRating"])")
+
+    self.init(
+      title: title,
+      instructions: instructions,
+      ingredients: ingredients,
+      authorId: authorID,
+      tags: tags,
+      averageRating: averageRating,
+      imageUri: imageURL,
+      prepTime: prepTime,
+      cookTime: cookTime,
+      servings: servings
+    )
+
+    self.id = documentID
+  }
+
+  enum DecodingError: Error {
+    case missingKeys(String)
+  }
 }
