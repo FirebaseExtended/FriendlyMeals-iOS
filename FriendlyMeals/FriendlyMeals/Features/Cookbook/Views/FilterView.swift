@@ -32,6 +32,8 @@ struct FilterConfiguration {
 
   var recipeTitle = ""
 
+  var recipeInstructions = ""
+
   var minimumRating: Double = 0
 
   var selectedTags: Set<String> = []
@@ -86,6 +88,9 @@ struct FilterView: View {
 
       Text("Filter by title")
       TextField("Scallops", text: $configuration.recipeTitle)
+
+      Text("Search recipe text")
+      TextField("Bake for 30 minutes", text: $configuration.recipeInstructions)
 
       Text("Minimum rating: \(configuration.minimumRating.formatted())")
       Slider(

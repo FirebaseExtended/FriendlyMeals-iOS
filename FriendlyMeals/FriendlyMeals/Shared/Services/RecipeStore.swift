@@ -52,6 +52,15 @@ class RecipeStore {
                                   to pipeline: Pipeline,
                                   currentUserID: String? = Auth.auth().currentUser?.uid) -> Pipeline {
     var filters = pipeline
+    if !configuration.recipeInstructions.isEmpty {
+      filters = pipeline.search(
+        query: "\(configuration.recipeInstructions)",
+        addFields: [
+          Score().as("searchScore")
+        ]
+      )
+    }
+
     if let id = currentUserID, configuration.shouldShowOnlyOwnRecipes {
       filters = filters.where(Field("authorId").equal(id))
     }
@@ -85,6 +94,10 @@ class RecipeStore {
     case .popularity:
       filters = filters.sort([Field("likes").descending()])
     case .none:
+      // If no existing filter, sort by search score if it exists.
+      if !configuration.recipeInstructions.isEmpty {
+        filters = filters.sort([Field("searchScore").descending()])
+      }
       break
     @unknown default:
       break
@@ -96,7 +109,8 @@ class RecipeStore {
   func applyConfiguration(_ configuration: FilterConfiguration) {
     filterConfiguration = configuration
     let output = { (store: Firestore) -> Pipeline in
-      return self.applyConfiguration(configuration, to: store.pipeline().collection(RecipeStore.recipeCollection))
+      let pipeline = store.pipeline().collection(RecipeStore.recipeCollection)
+      return self.applyConfiguration(configuration, to: pipeline)
     }
     activeFilters = output
   }
