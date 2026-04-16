@@ -166,22 +166,6 @@ class RecipeStore {
     let docRef = db.collection(RecipeStore.recipeCollection).document(id)
     try docRef.setData(from: recipe, mergeFields: ["isFavorite"])
   }
-
-  func averageRating(for recipeID: String) async throws -> Double? {
-    let collectionPath =
-        "\(RecipeStore.recipeCollection)/\(recipeID)/\(RecipeStore.reviewsSubcollection)"
-
-    let snapshot = try await db
-      .pipeline()
-      .collection(collectionPath)
-      .aggregate([Field("rating").average().as("averageRating")])
-      .execute()
-
-    let average = snapshot.results.first?.data["averageRating"] as? Double
-    return average.flatMap {
-      return $0 >= 1 && $0 <= 5 ? $0 : nil
-    }
-  }
 }
 
 // Reviews

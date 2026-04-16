@@ -30,7 +30,6 @@ struct Recipe: Codable, Identifiable, Hashable, RecipeRepresentable {
   // These are plain strings
   var tags: [String]
 
-  var averageRating: Double
   var imageUri: String?
 
   // These are display strings
@@ -48,7 +47,6 @@ extension Recipe {
       ingredients: representable.ingredients,
       authorId: authorID ?? "anonymous",
       tags: representable.tags,
-      averageRating: 0,
       imageUri: representable.imageUri,
       prepTime: representable.prepTime,
       cookTime: representable.cookTime,
@@ -63,7 +61,6 @@ extension Recipe {
       let ingredients = result.data["ingredients"] as? [String],
       let authorID = result.data["authorId"] as? String,
       let tags = result.data["tags"] as? [String],
-      let averageRating = result.data["averageRating"] as? Double,
       let prepTime = result.data["prepTime"] as? String,
       let cookTime = result.data["cookTime"] as? String,
       let servings = result.data["servings"] as? String,
@@ -72,15 +69,12 @@ extension Recipe {
       throw DecodingError.missingKeys(errorMessage)
     }
 
-    print("rating: \(result.data["averageRating"])")
-
     self.init(
       title: title,
       instructions: instructions,
       ingredients: ingredients,
       authorId: authorID,
       tags: tags,
-      averageRating: averageRating,
       imageUri: imageURL,
       prepTime: prepTime,
       cookTime: cookTime,

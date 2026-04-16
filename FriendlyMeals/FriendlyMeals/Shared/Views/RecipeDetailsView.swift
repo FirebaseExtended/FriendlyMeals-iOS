@@ -232,7 +232,6 @@ extension RecipeDetailsView: View {
       ],
       authorId: "no author",
       tags: [],
-      averageRating: 4.5,
       imageUri: "https://www.gstatic.com/devrel-devsite/prod/ve08add287a6b4bdf8961ab8a1be50bf551be3816cdd70b7cc934114ff3ad5f10/firebase/images/lockup.svg",
       prepTime: "30 minutes",
       cookTime: "10 minutes",
