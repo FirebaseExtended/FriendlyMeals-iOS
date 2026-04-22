@@ -74,6 +74,9 @@ class RecipeStore {
       )
     }
 
+    let shouldAddAverageRating = configuration.minimumRating > 0 ||
+      configuration.sortOption == .rating
+
     if let id = currentUserID, configuration.shouldShowOnlyOwnRecipes {
       filters = filters.where(Field("authorId").equal(id))
     }
@@ -86,15 +89,28 @@ class RecipeStore {
       filters = filters.where(Field("tags").arrayContainsAny(Array(configuration.selectedTags)))
     }
 
+    // Always add likes
+    filters = filters.define([Field("__name__").documentId().as("parentRecipeId")]).addFields([
+      db.pipeline()
+        .collection("likes")
+        .where(Field("recipeId").equal(Variable("parentRecipeId")))
+        .aggregate([CountAll().as("count")])
+        .toScalarExpression()
+        .as("likes")
+    ])
+    // Add rating sometimes
+    if shouldAddAverageRating {
+      filters = filters.addFields([
+        Subcollection(RecipeStore.reviewsSubcollection)
+          .aggregate([Field("rating").average().as("averageRating")])
+          .toScalarExpression()
+          .as("averageRating")
+      ])
+    }
+
     if configuration.minimumRating > 0 {
-      filters = filters
-        .addFields([
-          Subcollection(RecipeStore.reviewsSubcollection)
-            .aggregate([Field("rating").average().as("averageRating")])
-            .toScalarExpression()
-            .as("averageRating")
-        ])
-        .where(Field("averageRating").exists() && Field("averageRating").greaterThanOrEqual(configuration.minimumRating)
+      filters = filters.where(
+        Field("averageRating").exists() && Field("averageRating").greaterThanOrEqual(configuration.minimumRating)
       )
     }
 
@@ -121,7 +137,7 @@ class RecipeStore {
   func applyConfiguration(_ configuration: FilterConfiguration) {
     filterConfiguration = configuration
     let output = { (store: Firestore) -> Pipeline in
-      let pipeline = RecipeStore.defaultFilter(store)
+      let pipeline = store.pipeline().collection(RecipeStore.recipeCollection)
       return self.applyConfiguration(configuration, to: pipeline, using: store)
     }
     activeFilters = output
