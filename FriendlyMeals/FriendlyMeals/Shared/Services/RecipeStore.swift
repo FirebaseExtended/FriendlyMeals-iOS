@@ -87,11 +87,9 @@ class RecipeStore {
     }
 
     if configuration.minimumRating > 0 {
-      let parentRestaurantID = "parentRestaurantID"
-      filters = filters.define([Field("__name__").as(parentRestaurantID)])
+      filters = filters
         .addFields([
-          db.pipeline()
-            .collection("reviews")
+          Subcollection(RecipeStore.reviewsSubcollection)
             .aggregate([Field("rating").average().as("averageRating")])
             .toScalarExpression()
             .as("averageRating")
@@ -195,7 +193,7 @@ class RecipeStore {
 // Reviews
 extension RecipeStore {
 
-  private static let reviewsSubcollection = "reviews"
+  fileprivate static let reviewsSubcollection = "reviews"
 
   func fetchReview(userID: String, recipeID: String) async throws -> Review? {
     let compositeID = "\(recipeID)_\(userID)"
