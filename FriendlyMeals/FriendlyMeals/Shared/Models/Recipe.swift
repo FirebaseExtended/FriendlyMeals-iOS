@@ -69,7 +69,7 @@ extension Recipe {
       let servings = result.data["servings"] as? String,
       let documentID = result.id else {
       let errorMessage = "Unable to initialize recipes from data: \(result.data)"
-      throw DecodingError.missingKeys(errorMessage)
+      throw RecipeDecodingError.missingKeys(errorMessage)
     }
 
     let likes = result.data["likes"] as? Int
@@ -90,7 +90,7 @@ extension Recipe {
     self.id = documentID
   }
 
-  enum DecodingError: Error {
+  enum RecipeDecodingError: Error {
     case missingKeys(String)
   }
 }
