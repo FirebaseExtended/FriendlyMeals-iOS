@@ -37,6 +37,8 @@ struct Recipe: Codable, Identifiable, Hashable, RecipeRepresentable {
   var cookTime: String
   var servings: String
 
+  var likes: Int?
+
 }
 
 extension Recipe {
@@ -50,7 +52,8 @@ extension Recipe {
       imageUri: representable.imageUri,
       prepTime: representable.prepTime,
       cookTime: representable.cookTime,
-      servings: representable.servings
+      servings: representable.servings,
+      likes: nil
     )
   }
 
@@ -69,6 +72,8 @@ extension Recipe {
       throw DecodingError.missingKeys(errorMessage)
     }
 
+    let likes = result.data["likes"] as? Int
+
     self.init(
       title: title,
       instructions: instructions,
@@ -78,7 +83,8 @@ extension Recipe {
       imageUri: imageURL,
       prepTime: prepTime,
       cookTime: cookTime,
-      servings: servings
+      servings: servings,
+      likes: likes
     )
 
     self.id = documentID

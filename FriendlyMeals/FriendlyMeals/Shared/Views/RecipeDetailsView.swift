@@ -92,6 +92,15 @@ extension RecipeDetailsView: View {
                 if remainder > 0 {
                   partialStar(percentage: remainder)
                 }
+
+                if let likes = recipe.likes {
+                  Spacer()
+                  Image(systemName: "heart.fill")
+                    .foregroundColor(.pink)
+                  Text("\(likes) likes")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
               }
               .task {
                 do {

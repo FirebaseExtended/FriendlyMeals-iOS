@@ -39,6 +39,15 @@ class RecipeStore {
 
   private static func defaultFilter(_ store: Firestore) -> Pipeline {
     return store.pipeline().collection(recipeCollection)
+      .define([Field("__name__").documentId().as("parentRecipeId")])
+      .addFields([
+        store.pipeline()
+          .collection("likes")
+          .where(Field("recipeId").equal(Variable("parentRecipeId")))
+          .aggregate([CountAll().as("count")])
+          .toScalarExpression()
+          .as("likes")
+      ])
   }
 
   private var activeQuery: Pipeline {
@@ -50,10 +59,14 @@ class RecipeStore {
 
   private func applyConfiguration(_ configuration: FilterConfiguration,
                                   to pipeline: Pipeline,
+                                  using db: Firestore,
                                   currentUserID: String? = Auth.auth().currentUser?.uid) -> Pipeline {
     var filters = pipeline
+
     if !configuration.recipeInstructions.isEmpty {
-      filters = pipeline.search(
+      // Search must be the first stage in a pipeline, so don't add any
+      // stages before this.
+      filters = filters.search(
         query: "\(configuration.recipeInstructions)",
         addFields: [
           Score().as("searchScore")
@@ -77,7 +90,8 @@ class RecipeStore {
       let parentRestaurantID = "parentRestaurantID"
       filters = filters.define([Field("__name__").as(parentRestaurantID)])
         .addFields([
-          Subcollection("reviews")
+          db.pipeline()
+            .collection("reviews")
             .aggregate([Field("rating").average().as("averageRating")])
             .toScalarExpression()
             .as("averageRating")
@@ -92,7 +106,15 @@ class RecipeStore {
     case .rating:
       filters = filters.sort([Field("averageRating").descending()])
     case .popularity:
-      filters = filters.sort([Field("likes").descending()])
+      filters = filters.define([Field("__name__").documentId().as("parentRecipeId")])
+        .addFields([
+          db.pipeline()
+            .collection("likes")
+            .where(Field("recipeId").equal(Variable("parentRecipeId")))
+            .aggregate([CountAll().as("count")])
+            .toScalarExpression()
+            .as("likes")
+        ]).sort([Field("likes").descending()])
     case .none:
       // If no existing filter, sort by search score if it exists.
       if !configuration.recipeInstructions.isEmpty {
@@ -110,7 +132,7 @@ class RecipeStore {
     filterConfiguration = configuration
     let output = { (store: Firestore) -> Pipeline in
       let pipeline = store.pipeline().collection(RecipeStore.recipeCollection)
-      return self.applyConfiguration(configuration, to: pipeline)
+      return self.applyConfiguration(configuration, to: pipeline, using: store)
     }
     activeFilters = output
   }
@@ -124,6 +146,8 @@ class RecipeStore {
     let query = activeQuery
 
     let snapshot = try await query.execute()
+    print(snapshot.results)
+    print(self.recipes)
     self.recipes = try snapshot.results.compactMap { result in
       return try Recipe(from: result)
     }
