@@ -32,6 +32,8 @@ struct FilterConfiguration {
 
   var recipeTitle = ""
 
+  var recipeInstructions = ""
+
   var minimumRating: Double = 0
 
   var selectedTags: Set<String> = []
@@ -41,6 +43,8 @@ struct FilterConfiguration {
 }
 
 struct FilterView: View {
+
+  @Environment(\.dismiss) private var dismiss
 
   init(
     tags: [String],
@@ -76,68 +80,102 @@ struct FilterView: View {
   @State private var configuration: FilterConfiguration
 
   var body: some View {
-    VStack(alignment: .leading) {
-      Text("Filters")
-        .font(.largeTitle)
+    NavigationStack {
+      Form {
+        Section {
+          Toggle("View only my recipes", isOn: $configuration.shouldShowOnlyOwnRecipes)
+        } header: {
+          Label("General", systemImage: "slider.horizontal.3")
+        }
 
-      Toggle(isOn: $configuration.shouldShowOnlyOwnRecipes) {
-        Text("View only my recipes")
-      }
-
-      Text("Filter by title")
-      TextField("Scallops", text: $configuration.recipeTitle)
-
-      Text("Minimum rating: \(configuration.minimumRating.formatted())")
-      Slider(
-        value: $configuration.minimumRating,
-        in: 0...5,
-        step: 0.25
-      ) {
-        Text("Minimum rating")
-      } minimumValueLabel: {
-        Text("0")
-      } maximumValueLabel: {
-        Text("5")
-      } onEditingChanged: { _ in
-        // do nothing
-      }
-
-      Text("Tags")
-      ScrollView(.horizontal, showsIndicators: true) {
-        HStack {
-          ForEach(0 ..< tags.count, id: \.self) { index in
-            let tag = tags[index]
-            let isSelected = tagSelections[index]
-            Toggle(tag, isOn: $tagSelections[index])
-              .toggleStyle(.button)
-              .tint(isSelected ? .blue : .secondary)
+        Section {
+          LabeledContent("Title") {
+            TextField("Scallops", text: $configuration.recipeTitle)
+              .multilineTextAlignment(.trailing)
           }
+          LabeledContent("Instructions") {
+            TextField("Bake for 30 minutes", text: $configuration.recipeInstructions)
+              .multilineTextAlignment(.trailing)
+          }
+        } header: {
+          Label("Search", systemImage: "magnifyingglass")
         }
-      }
 
-      Text("Sort by")
-      Picker("Choose a sort method", selection: $configuration.sortOption) {
-        ForEach(FilterConfiguration.sortOptions, id: \.self) { option in
-          Text(option.rawValue).tag(option.rawValue)
+        Section {
+          VStack(alignment: .leading, spacing: 12) {
+            HStack {
+              Text(configuration.minimumRating.formatted())
+                .font(.headline)
+              Spacer()
+              HStack(spacing: 2) {
+                let rating = configuration.minimumRating
+                ForEach(0..<5) { index in
+                  let starName = index < Int(rating) ? "star.fill" : (index < Int(rating.rounded(.up)) ? "star.leadinghalf.filled" : "star")
+                  Image(systemName: starName)
+                    .foregroundColor(.yellow)
+                }
+              }
+            }
+            Slider(value: $configuration.minimumRating, in: 0...5, step: 0.25)
+              .tint(.blue)
+          }
+          .padding(.vertical, 4)
+        } header: {
+          Label("Minimum Rating", systemImage: "star.fill")
         }
-      }
 
-      HStack {
-        Button("Remove filters") {
-          configuration = FilterConfiguration()
-          tagSelections = tagSelections.map { _ in false }
+        Section {
+          ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+              ForEach(0 ..< tags.count, id: \.self) { index in
+                let tag = tags[index]
+                let isSelected = tagSelections[index]
+                Toggle(tag, isOn: $tagSelections[index])
+                  .toggleStyle(.button)
+                  .tint(isSelected ? .blue : .secondary)
+                  .clipShape(Capsule())
+              }
+            }
+            .padding(.vertical, 4)
+          }
+        } header: {
+          Label("Tags", systemImage: "tag.fill")
         }
-        Button("Apply filters") {
-          let selectedTags = tags.indices
-            .filter { tagSelections[$0] }
-            .map { tags[$0] }
-          configuration.selectedTags = Set(selectedTags)
-          applyFilters(configuration)
+
+        Section {
+          Picker("Sort method", selection: $configuration.sortOption) {
+            ForEach(FilterConfiguration.sortOptions, id: \.self) { option in
+              Text(option.rawValue).tag(option)
+            }
+          }
+          .pickerStyle(.menu)
+        } header: {
+          Label("Sort By", systemImage: "arrow.up.arrow.down")
         }
       }
-      Spacer()
+      .navigationTitle("Filters")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Reset") {
+            configuration = FilterConfiguration()
+            tagSelections = tagSelections.map { _ in false }
+          }
+          .foregroundColor(.red)
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Apply") {
+            let selectedTags = tags.indices
+              .filter { tagSelections[$0] }
+              .map { tags[$0] }
+            configuration.selectedTags = Set(selectedTags)
+            applyFilters(configuration)
+            dismiss()
+          }
+          .fontWeight(.bold)
+        }
+      }
     }
-    .padding(16)
   }
 
 }

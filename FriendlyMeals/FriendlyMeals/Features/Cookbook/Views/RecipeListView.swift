@@ -38,6 +38,11 @@ struct RecipeListView: View {
               .font(.headline)
           }
           Spacer()
+          if let likes = recipe.likes, likes > 0 {
+            Text("\(likes)")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
           if likesStore.isLiked(recipe) {
             Image(systemName: "heart.fill")
               .foregroundColor(.pink)

@@ -23,7 +23,6 @@ import FirebaseAuth
 enum RecipeStoreError: Error {
   case missingRecipeID
   case likeDecodingError(String)
-  case recipeDecodingError(String)
   case reviewDecodingError(String)
 }
 
@@ -40,6 +39,15 @@ class RecipeStore {
 
   private static func defaultFilter(_ store: Firestore) -> Pipeline {
     return store.pipeline().collection(recipeCollection)
+      .define([Field("__name__").documentId().as("parentRecipeId")])
+      .addFields([
+        store.pipeline()
+          .collection("likes")
+          .where(Field("recipeId").equal(Variable("parentRecipeId")))
+          .aggregate([CountAll().as("count")])
+          .toScalarExpression()
+          .as("likes")
+      ])
   }
 
   private var activeQuery: Pipeline {
@@ -51,8 +59,24 @@ class RecipeStore {
 
   private func applyConfiguration(_ configuration: FilterConfiguration,
                                   to pipeline: Pipeline,
+                                  using db: Firestore,
                                   currentUserID: String? = Auth.auth().currentUser?.uid) -> Pipeline {
     var filters = pipeline
+
+    if !configuration.recipeInstructions.isEmpty {
+      // Search must be the first stage in a pipeline, so don't add any
+      // stages before this.
+      filters = filters.search(
+        query: "\(configuration.recipeInstructions)",
+        addFields: [
+          Score().as("searchScore")
+        ]
+      )
+    }
+
+    let shouldAddAverageRating = configuration.minimumRating > 0 ||
+      configuration.sortOption == .rating
+
     if let id = currentUserID, configuration.shouldShowOnlyOwnRecipes {
       filters = filters.where(Field("authorId").equal(id))
     }
@@ -61,12 +85,33 @@ class RecipeStore {
       filters = filters.where(Field("title").like("%\(configuration.recipeTitle)%"))
     }
 
-    if configuration.minimumRating > 0 {
-      filters = filters.where(Field("averageRating").greaterThanOrEqual(configuration.minimumRating))
-    }
-
     if !configuration.selectedTags.isEmpty {
       filters = filters.where(Field("tags").arrayContainsAny(Array(configuration.selectedTags)))
+    }
+
+    // Always add likes
+    filters = filters.define([Field("__name__").documentId().as("parentRecipeId")]).addFields([
+      db.pipeline()
+        .collection("likes")
+        .where(Field("recipeId").equal(Variable("parentRecipeId")))
+        .aggregate([CountAll().as("count")])
+        .toScalarExpression()
+        .as("likes")
+    ])
+    // Add rating sometimes
+    if shouldAddAverageRating {
+      filters = filters.addFields([
+        Subcollection(RecipeStore.reviewsSubcollection)
+          .aggregate([Field("rating").average().as("averageRating")])
+          .toScalarExpression()
+          .as("averageRating")
+      ])
+    }
+
+    if configuration.minimumRating > 0 {
+      filters = filters.where(
+        Field("averageRating").exists() && Field("averageRating").greaterThanOrEqual(configuration.minimumRating)
+      )
     }
 
     switch configuration.sortOption {
@@ -77,6 +122,10 @@ class RecipeStore {
     case .popularity:
       filters = filters.sort([Field("likes").descending()])
     case .none:
+      // If no existing filter, sort by search score if it exists.
+      if !configuration.recipeInstructions.isEmpty {
+        filters = filters.sort([Field("searchScore").descending()])
+      }
       break
     @unknown default:
       break
@@ -88,7 +137,8 @@ class RecipeStore {
   func applyConfiguration(_ configuration: FilterConfiguration) {
     filterConfiguration = configuration
     let output = { (store: Firestore) -> Pipeline in
-      return self.applyConfiguration(configuration, to: store.pipeline().collection(RecipeStore.recipeCollection))
+      let pipeline = store.pipeline().collection(RecipeStore.recipeCollection)
+      return self.applyConfiguration(configuration, to: pipeline, using: store)
     }
     activeFilters = output
   }
@@ -98,44 +148,13 @@ class RecipeStore {
     try collection.addDocument(from: recipe)
   }
   
-  func fetchRecipes(withUserID userID: String? = Auth.auth().currentUser?.uid) async throws {
+  func fetchRecipes() async throws {
     let query = activeQuery
 
     let snapshot = try await query.execute()
     self.recipes = try snapshot.results.compactMap { result in
-      let imageURL = result.data["imageUri"] as? String
-
-      guard let title = result.data["title"] as? String,
-        let instructions = result.data["instructions"] as? String,
-        let ingredients = result.data["ingredients"] as? [String],
-        let authorID = result.data["authorId"] as? String,
-        let tags = result.data["tags"] as? [String],
-        let averageRating = result.data["averageRating"] as? Double,
-        let prepTime = result.data["prepTime"] as? String,
-        let cookTime = result.data["cookTime"] as? String,
-        let servings = result.data["servings"] as? String,
-        let documentID = result.id else {
-        let errorMessage = "Unable to initialize recipes from data: \(result.data)"
-        throw RecipeStoreError.recipeDecodingError(errorMessage)
-      }
-
-      var recipe = Recipe(
-        title: title,
-        instructions: instructions,
-        ingredients: ingredients,
-        authorId: authorID,
-        tags: tags,
-        averageRating: averageRating,
-        imageUri: imageURL,
-        prepTime: prepTime,
-        cookTime: cookTime,
-        servings: servings
-      )
-
-      recipe.id = documentID
-      return recipe
+      return try Recipe(from: result)
     }
-
   }
 
   @discardableResult
@@ -180,7 +199,7 @@ class RecipeStore {
 // Reviews
 extension RecipeStore {
 
-  private static let reviewsSubcollection = "reviews"
+  fileprivate static let reviewsSubcollection = "reviews"
 
   func fetchReview(userID: String, recipeID: String) async throws -> Review? {
     let compositeID = "\(recipeID)_\(userID)"

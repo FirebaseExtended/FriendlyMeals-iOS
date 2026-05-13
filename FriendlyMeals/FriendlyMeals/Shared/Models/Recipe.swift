@@ -30,13 +30,14 @@ struct Recipe: Codable, Identifiable, Hashable, RecipeRepresentable {
   // These are plain strings
   var tags: [String]
 
-  var averageRating: Double
   var imageUri: String?
 
   // These are display strings
   var prepTime: String
   var cookTime: String
   var servings: String
+
+  var likes: Int?
 
 }
 
@@ -48,11 +49,48 @@ extension Recipe {
       ingredients: representable.ingredients,
       authorId: authorID ?? "anonymous",
       tags: representable.tags,
-      averageRating: 0,
       imageUri: representable.imageUri,
       prepTime: representable.prepTime,
       cookTime: representable.cookTime,
-      servings: representable.servings
+      servings: representable.servings,
+      likes: nil
     )
+  }
+
+  init(from result: PipelineResult) throws {
+    let imageURL = result.data["imageUri"] as? String
+    guard let title = result.data["title"] as? String,
+      let instructions = result.data["instructions"] as? String,
+      let ingredients = result.data["ingredients"] as? [String],
+      let authorID = result.data["authorId"] as? String,
+      let tags = result.data["tags"] as? [String],
+      let prepTime = result.data["prepTime"] as? String,
+      let cookTime = result.data["cookTime"] as? String,
+      let servings = result.data["servings"] as? String,
+      let documentID = result.id else {
+      let errorMessage = "Unable to initialize recipes from data: \(result.data)"
+      throw RecipeDecodingError.missingKeys(errorMessage)
+    }
+
+    let likes = result.data["likes"] as? Int
+
+    self.init(
+      title: title,
+      instructions: instructions,
+      ingredients: ingredients,
+      authorId: authorID,
+      tags: tags,
+      imageUri: imageURL,
+      prepTime: prepTime,
+      cookTime: cookTime,
+      servings: servings,
+      likes: likes
+    )
+
+    self.id = documentID
+  }
+
+  enum RecipeDecodingError: Error {
+    case missingKeys(String)
   }
 }

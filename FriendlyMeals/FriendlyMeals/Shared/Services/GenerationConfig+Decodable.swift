@@ -16,7 +16,7 @@
 // limitations under the License.
 
 import Foundation
-import FirebaseAI
+import FirebaseAILogic
 
 extension ResponseModality: @retroactive Decodable {
   public init(from decoder: Decoder) throws {
