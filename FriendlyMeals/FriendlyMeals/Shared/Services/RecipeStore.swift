@@ -38,16 +38,8 @@ class RecipeStore {
   @MainActor private(set) var recipes = [Recipe]()
 
   private static func defaultFilter(_ store: Firestore) -> Pipeline {
+    // TODO: Implement default filter pipeline query with likes count aggregation on-the-fly.
     return store.pipeline().collection(recipeCollection)
-      .define([Field("__name__").documentId().as("parentRecipeId")])
-      .addFields([
-        store.pipeline()
-          .collection("likes")
-          .where(Field("recipeId").equal(Variable("parentRecipeId")))
-          .aggregate([CountAll().as("count")])
-          .toScalarExpression()
-          .as("likes")
-      ])
   }
 
   private var activeQuery: Pipeline {
@@ -61,77 +53,8 @@ class RecipeStore {
                                   to pipeline: Pipeline,
                                   using db: Firestore,
                                   currentUserID: String? = Auth.auth().currentUser?.uid) -> Pipeline {
-    var filters = pipeline
-
-    if !configuration.recipeInstructions.isEmpty {
-      // Search must be the first stage in a pipeline, so don't add any
-      // stages before this.
-      filters = filters.search(
-        query: "\(configuration.recipeInstructions)",
-        addFields: [
-          Score().as("searchScore")
-        ]
-      )
-    }
-
-    let shouldAddAverageRating = configuration.minimumRating > 0 ||
-      configuration.sortOption == .rating
-
-    if let id = currentUserID, configuration.shouldShowOnlyOwnRecipes {
-      filters = filters.where(Field("authorId").equal(id))
-    }
-
-    if !configuration.recipeTitle.isEmpty {
-      filters = filters.where(Field("title").like("%\(configuration.recipeTitle)%"))
-    }
-
-    if !configuration.selectedTags.isEmpty {
-      filters = filters.where(Field("tags").arrayContainsAny(Array(configuration.selectedTags)))
-    }
-
-    // Always add likes
-    filters = filters.define([Field("__name__").documentId().as("parentRecipeId")]).addFields([
-      db.pipeline()
-        .collection("likes")
-        .where(Field("recipeId").equal(Variable("parentRecipeId")))
-        .aggregate([CountAll().as("count")])
-        .toScalarExpression()
-        .as("likes")
-    ])
-    // Add rating sometimes
-    if shouldAddAverageRating {
-      filters = filters.addFields([
-        Subcollection(RecipeStore.reviewsSubcollection)
-          .aggregate([Field("rating").average().as("averageRating")])
-          .toScalarExpression()
-          .as("averageRating")
-      ])
-    }
-
-    if configuration.minimumRating > 0 {
-      filters = filters.where(
-        Field("averageRating").exists() && Field("averageRating").greaterThanOrEqual(configuration.minimumRating)
-      )
-    }
-
-    switch configuration.sortOption {
-    case .alphabetical:
-      filters = filters.sort([Field("title").ascending()])
-    case .rating:
-      filters = filters.sort([Field("averageRating").descending()])
-    case .popularity:
-      filters = filters.sort([Field("likes").descending()])
-    case .none:
-      // If no existing filter, sort by search score if it exists.
-      if !configuration.recipeInstructions.isEmpty {
-        filters = filters.sort([Field("searchScore").descending()])
-      }
-      break
-    @unknown default:
-      break
-    }
-
-    return filters
+    // TODO: Build the multi-stage query pipeline using the active FilterConfiguration.
+    return pipeline
   }
 
   func applyConfiguration(_ configuration: FilterConfiguration) {
@@ -144,39 +67,18 @@ class RecipeStore {
   }
 
   func add(_ recipe: Recipe) async throws {
-    let collection = db.collection(RecipeStore.recipeCollection)
-    try collection.addDocument(from: recipe)
+    // TODO: Add recipe to the database.
   }
   
   func fetchRecipes() async throws {
-    let query = activeQuery
-
-    let snapshot = try await query.execute()
-    self.recipes = try snapshot.results.compactMap { result in
-      return try Recipe(from: result)
-    }
+    // TODO: Retrieve saved recipe documents from the pipeline query.
+    self.recipes = []
   }
 
   @discardableResult
   func fetchPopularTags() async throws -> [String] {
-    let snapshot = try await db.pipeline()
-      .collection(RecipeStore.recipeCollection)
-      .select([Field("tags")])
-      .unnest(Field("tags").as("tagName"))
-      .aggregate(
-        [
-          CountAll().as("tagCount")
-        ], groups: [Field("tagName")]
-      )
-      .sort([Field("tagCount").descending()])
-      .limit(10)
-      .execute()
-
-    let results = snapshot.results.compactMap { result in
-      return result.data["tagName"] as? String
-    }
-    topTags = results
-    return results
+    // TODO: Fetch the top 10 most popular tags using unnest, aggregate, and sort.
+    return []
   }
 
   func delete(_ recipe: Recipe) async throws {
@@ -231,16 +133,7 @@ extension RecipeStore {
   }
 
   func fetchRating(recipeID: String) async throws -> Double {
-    let collectionPath = "\(RecipeStore.recipeCollection)/\(recipeID)/\(RecipeStore.reviewsSubcollection)"
-    let snapshot = try await db.pipeline()
-      .collection(collectionPath)
-      .aggregate([
-        Field("rating").average().as("averageRating")
-      ]).execute()
-    guard let rating = snapshot.results.first?.data["averageRating"] as? Double else {
-      print("warning: unable to find rating in \(snapshot.results)")
-      return 0
-    }
-    return rating
+    // TODO: Calculate the average rating dynamically using aggregation.
+    return 0
   }
 }
