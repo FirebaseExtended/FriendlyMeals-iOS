@@ -18,6 +18,7 @@
 import SwiftUI
 import FirebaseCore
 import FirebaseAuth
+import FirebaseAppCheck
 
 @main
 struct FriendlyMealsApp: App {
@@ -25,6 +26,10 @@ struct FriendlyMealsApp: App {
   @State private var likesStore: LikesStore
 
   init () {
+    let providerFactory = AppCheckDebugProviderFactory()
+    AppCheck.setAppCheckProviderFactory(providerFactory)
+    FirebaseConfiguration.shared.setLoggerLevel(.debug)
+
     FirebaseApp.configure()
     _recipeStore = State(initialValue: RecipeStore())
     _likesStore = State(initialValue: LikesStore())
